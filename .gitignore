@@ -1,0 +1,29 @@
+# Binary output and runtime data
+bin/
+data/
+*.sst
+wal/
+*.log
+
+# AI Agent Frameworks, Skills, and Local Tooling
+.agents/
+.kilo/
+kilo.json
+kilo.jsonc
+.claude/
+.cursor/
+.codex/
+.opencode/
+.gemini/
+.ecc*
+skills/
+agents/
+
+# Environment and local credentials
+.env
+.env*.local
+*.local
+
+# System files
+.DS_Store
+Thumbs.db

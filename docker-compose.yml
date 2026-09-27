@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projectx-node-1
+    command: ["-port", "8080", "-dir", "/app/data/node1", "-node-id", "1"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - node1_data:/app/data/node1
+    networks:
+      - projectx-cluster
+    restart: unless-stopped
+
+  node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projectx-node-2
+    command: ["-port", "8081", "-dir", "/app/data/node2", "-node-id", "2"]
+    ports:
+      - "8081:8081"
+    volumes:
+      - node2_data:/app/data/node2
+    networks:
+      - projectx-cluster
+    restart: unless-stopped
+
+  node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projectx-node-3
+    command: ["-port", "8082", "-dir", "/app/data/node3", "-node-id", "3"]
+    ports:
+      - "8082:8082"
+    volumes:
+      - node3_data:/app/data/node3
+    networks:
+      - projectx-cluster
+    restart: unless-stopped
+
+networks:
+  projectx-cluster:
+    driver: bridge
+
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:

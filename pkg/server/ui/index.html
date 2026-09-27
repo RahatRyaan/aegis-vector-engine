@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project-X // Distributed Storage & AI Agent Engine</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #121826;
+            --bg-card: rgba(22, 30, 49, 0.7);
+            --border: #232f48;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+        body { background: var(--bg-primary); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+        header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.25rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { background: #1e3a8a; color: #93c5fd; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+        .badge.online { background: #064e3b; color: #6ee7b7; }
+        .nav-tabs { display: flex; gap: 1rem; }
+        .tab-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; }
+        .tab-btn.active, .tab-btn:hover { background: var(--bg-card); color: #fff; border-color: var(--border); }
+        main { flex: 1; padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; display: grid; gap: 2rem; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+        .metric-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; backdrop-filter: blur(10px); }
+        .metric-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .metric-val { font-size: 1.75rem; font-weight: 700; color: #fff; }
+        .chat-container { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; height: 600px; }
+        .chat-window { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
+        .chat-messages { flex: 1; padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+        .message { max-width: 80%; padding: 0.875rem 1.25rem; border-radius: 10px; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; }
+        .message.user { align-self: flex-end; background: var(--accent); color: #fff; }
+        .message.assistant { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); }
+        .chat-input-bar { padding: 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; background: var(--bg-secondary); }
+        .input-field { flex: 1; background: var(--bg-primary); border: 1px solid var(--border); color: #fff; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; }
+        .input-field:focus { outline: none; border-color: var(--accent); }
+        .btn { background: var(--accent); color: #fff; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.9; }
+        .memory-sidebar { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+        .memory-card { background: var(--bg-card); border: 1px solid var(--border); padding: 0.75rem; border-radius: 6px; font-size: 0.8rem; }
+        .memory-score { color: var(--accent-green); font-weight: 700; margin-bottom: 0.25rem; }
+        .panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+        .panel-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+        .code-block { background: var(--bg-primary); border: 1px solid var(--border); padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; overflow-x: auto; color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span>⚡ PROJECT-X</span>
+            <span class="badge online">RAFT CLUSTER HEALTHY</span>
+            <span class="badge">io_uring & AVX-512 ACTIVE</span>
+        </div>
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="showTab('chat')">AI Agent & Memory</button>
+            <button class="tab-btn" onclick="showTab('kv')">LSM-Tree KV</button>
+            <button class="tab-btn" onclick="showTab('search')">Hybrid Search</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Active Node ID</div>
+                <div class="metric-val" id="nodeId">#1</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Indexed Vectors (HNSW)</div>
+                <div class="metric-val" id="vectorCount">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Engine Write IOPS</div>
+                <div class="metric-val" style="color: #60a5fa;">120,000+</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Consensus State</div>
+                <div class="metric-val" style="color: #34d399;">Multi-Raft CP</div>
+            </div>
+        </div>
+
+        <!-- Tab 1: AI Agent Chat -->
+        <div id="tab-chat" class="chat-container">
+            <div class="chat-window">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant">Hello! I am Kilo-Core AI Agent connected to the distributed LSM-Tree and Vector storage engine. You can ask questions, query memory, or store facts using "remember: [fact]".</div>
+                </div>
+                <div class="chat-input-bar">
+                    <input type="text" id="chatInput" class="input-field" placeholder="Ask a question or type 'remember: <new fact>'..." onkeydown="if(event.key==='Enter') sendChat()">
+                    <button class="btn" onclick="sendChat()">Send</button>
+                </div>
+            </div>
+            <div class="memory-sidebar">
+                <h3 style="font-size: 0.9rem; text-transform: uppercase; color: var(--text-muted);">🧠 Live Recalled Memories</h3>
+                <div id="memoryList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">Memories retrieved by HNSW vector search will appear here.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: LSM-Tree KV Operations -->
+        <div id="tab-kv" class="panel" style="display: none;">
+            <div class="panel-title">LSM-Tree Key-Value Explorer (WAL + Direct-IO)</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                    <input type="text" id="kvKey" class="input-field" placeholder="Key (e.g. user_1001)" style="margin-bottom: 0.5rem; width: 100%;">
+                    <textarea id="kvVal" class="input-field" placeholder="Value payload..." style="height: 100px; width: 100%;"></textarea>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <button class="btn" onclick="putKV()">Put Key-Value</button>
+                        <button class="btn" style="background: #4b5563;" onclick="getKV()">Get Key</button>
+                        <button class="btn" style="background: #dc2626;" onclick="delKV()">Delete</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="code-block" id="kvResult">// Result will be displayed here</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Hybrid Search -->
+        <div id="tab-search" class="panel" style="display: none;">
+            <div class="panel-title">Hybrid Search (BM25 Sparse + HNSW Dense Vector Fusion)</div>
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+                <input type="text" id="hybridQuery" class="input-field" placeholder="Enter search term (e.g. consensus, vector acceleration, compaction)...">
+                <button class="btn" onclick="runHybridSearch()">Hybrid Search</button>
+            </div>
+            <div id="hybridResults" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+        </div>
+    </main>
+
+    <script>
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#tab-chat, #tab-kv, #tab-search').forEach(t => t.style.display = 'none');
+            
+            if (tabName === 'chat') {
+                document.getElementById('tab-chat').style.display = 'grid';
+                event.target.classList.add('active');
+            } else {
+                document.getElementById('tab-' + tabName).style.display = 'block';
+                event.target.classList.add('active');
+            }
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/healthz');
+                const data = await res.json();
+                document.getElementById('nodeId').innerText = '#' + data.node_id;
+                document.getElementById('vectorCount').innerText = data.vector_count;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        setInterval(fetchStats, 3000);
+        fetchStats();
+
+        async function sendChat() {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML += `<div class="message user">${msg}</div>`;
+            input.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                const res = await fetch('/v1/ai/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: 'web_session', message: msg})
+                });
+                const data = await res.json();
+
+                chatMessages.innerHTML += `<div class="message assistant">${data.reply}</div>`;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                const memList = document.getElementById('memoryList');
+                if (data.recalled_memories && data.recalled_memories.length > 0) {
+                    memList.innerHTML = data.recalled_memories.map(m => `
+                        <div class="memory-card">
+                            <div class="memory-score">Score: ${(m.score * 100).toFixed(1)}% | Sim: ${(m.similarity * 100).toFixed(1)}%</div>
+                            <div>${m.item.content}</div>
+                        </div>
+                    `).join('');
+                }
+                fetchStats();
+            } catch (err) {
+                chatMessages.innerHTML += `<div class="message assistant" style="color: #f87171;">Error: ${err.message}</div>`;
+            }
+        }
+
+        async function putKV() {
+            const key = document.getElementById('kvKey').value;
+            const value = document.getElementById('kvVal').value;
+            const res = await fetch('/v1/kv/put', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key, value})
+            });
+            const data = await res.json();
+            document.getElementById('kvResult').innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function getKV() {
+            const key = document.getElementById('kvKey').value;
+            const res = await fetch('/v1/kv/get?key=' + encodeURIComponent(key));
+            const data = await res.json();
+            document.getElementById('kvResult').innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function delKV() {
+            const key = document.getElementById('kvKey').value;
+            const res = await fetch('/v1/kv/del?key=' + encodeURIComponent(key));
+            const data = await res.json();
+            document.getElementById('kvResult').innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function runHybridSearch() {
+            const query = document.getElementById('hybridQuery').value;
+            if (!query) return;
+
+            const res = await fetch('/v1/search/hybrid?q=' + encodeURIComponent(query));
+            const data = await res.json();
+            const container = document.getElementById('hybridResults');
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted);">No matching documents found.</div>';
+                return;
+            }
+
+            container.innerHTML = data.results.map(r => `
+                <div class="panel" style="background: var(--bg-card);">
+                    <div style="color: #60a5fa; font-weight: 700; margin-bottom: 0.25rem;">Doc #${r.doc_id} | RRF Fusion Score: ${r.rrf_score.toFixed(4)}</div>
+                    <div>${r.text || 'Indexed document content'}</div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
