@@ -60,7 +60,7 @@ func OpenEngine(cfg Config) (*Engine, error) {
 	}
 
 	if cfg.MemTableSize == 0 {
-		cfg.MemTableSize = 64 * 1024 * 1024 // 64 MB
+		cfg.MemTableSize = 64 * 1024 * 1024
 	}
 	if cfg.VectorDim == 0 {
 		cfg.VectorDim = 128
@@ -81,7 +81,7 @@ func OpenEngine(cfg Config) (*Engine, error) {
 
 	vIdx := hnsw.NewHNSWIndex(cfg.VectorDim, cfg.VectorMetric)
 	bm := search.NewBM25Index()
-	hyb := search.NewHybridSearchEngine(bm, vIdx, 0.5)
+	hybn := search.NewHybridSearchEngine(bm, vIdx, 0.5)
 	emb := ai.NewEmbeddingGenerator(cfg.VectorDim)
 
 	eng := &Engine{
@@ -91,7 +91,7 @@ func OpenEngine(cfg Config) (*Engine, error) {
 		compactor: compaction.NewCompactionEngine(cfg.DataDir),
 		vectorIdx: vIdx,
 		bm25Idx:   bm,
-		hybrid:    hyb,
+		hybrid:    hybn,
 		embedder:  emb,
 		router:    router,
 		pdClient:  pdInst,
@@ -102,7 +102,6 @@ func OpenEngine(cfg Config) (*Engine, error) {
 	eng.memoryStore = memStore
 	eng.agent = ai.NewAIAgent(eng, memStore)
 
-	// Recover WAL state
 	maxSeq, err := w.Recover(func(rec *wal.Record) error {
 		return mem.Put(rec.Key, rec.Value, rec.Type, rec.Seq)
 	})
@@ -112,15 +111,15 @@ func OpenEngine(cfg Config) (*Engine, error) {
 	}
 	eng.seq = maxSeq
 
-	// Load existing SSTables
 	files, _ := filepath.Glob(filepath.Join(cfg.DataDir, "*.sst"))
 	for _, fPath := range files {
 		f, err := os.Open(fPath)
+		if err != nil {
+			continue
+		}
+		tr, err := sstable.OpenTableReader(f)
 		if err == nil {
-			tr, err := sstable.OpenTableReader(f)
-			if err == nil {
-				eng.tables = append(eng.tables, tr)
-			}
+			eng.tables = append(eng.tables, tr)
 		}
 	}
 
@@ -131,18 +130,13 @@ func (e *Engine) Put(key, value []byte) error {
 	if atomic.LoadUint32(&e.closed) == 1 {
 		return os.ErrClosed
 	}
-
 	seq := atomic.AddUint64(&e.seq, 1)
 
-	// 1. Write to Write-Ahead Log
 	if err := e.wal.Append(seq, memtable.OpPut, key, value); err != nil {
 		return err
 	}
-
-	// 2. Insert into MemTable
 	if err := e.memTable.Put(key, value, memtable.OpPut, seq); err != nil {
 		if errors.Is(err, memtable.ErrArenaFull) {
-			// Trigger Memtable flush
 			if err := e.rotateAndFlushMemtable(); err != nil {
 				return err
 			}
@@ -150,7 +144,6 @@ func (e *Engine) Put(key, value []byte) error {
 		}
 		return err
 	}
-
 	return nil
 }
 
@@ -158,18 +151,14 @@ func (e *Engine) Delete(key []byte) error {
 	if atomic.LoadUint32(&e.closed) == 1 {
 		return os.ErrClosed
 	}
-
 	seq := atomic.AddUint64(&e.seq, 1)
-
 	if err := e.wal.Append(seq, memtable.OpDel, key, nil); err != nil {
 		return err
 	}
-
 	return e.memTable.Put(key, nil, memtable.OpDel, seq)
 }
 
 func (e *Engine) Get(key []byte) ([]byte, bool, error) {
-	// 1. Check active MemTable
 	val, _, op, found := e.memTable.Get(key)
 	if found {
 		if op == memtable.OpDel {
@@ -178,7 +167,6 @@ func (e *Engine) Get(key []byte) ([]byte, bool, error) {
 		return val, true, nil
 	}
 
-	// 2. Check immutable MemTable if present
 	e.mu.RLock()
 	if e.immMem != nil {
 		val, _, op, found := e.immMem.Get(key)
@@ -191,7 +179,6 @@ func (e *Engine) Get(key []byte) ([]byte, bool, error) {
 		}
 	}
 
-	// 3. Search SSTables in reverse order (newest to oldest)
 	for i := len(e.tables) - 1; i >= 0; i-- {
 		tr := e.tables[i]
 		val, _, op, found, err := tr.Get(key)
@@ -207,8 +194,8 @@ func (e *Engine) Get(key []byte) ([]byte, bool, error) {
 			return val, true, nil
 		}
 	}
+		
 	e.mu.RUnlock()
-
 	return nil, false, nil
 }
 
@@ -222,7 +209,6 @@ func (e *Engine) rotateAndFlushMemtable() error {
 	e.memTable = memtable.NewConcurrentSkiplist(newArena)
 	e.mu.Unlock()
 
-	// Flush immMem to L0 SSTable
 	tableID := e.compactor.NextID()
 	sstPath := filepath.Join(e.cfg.DataDir, fmt.Sprintf("%06d.sst", tableID))
 	file, err := os.OpenFile(sstPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
@@ -237,17 +223,15 @@ func (e *Engine) rotateAndFlushMemtable() error {
 		_ = tb.Add(it.Key(), it.Value(), it.Seq(), it.OpType())
 		it.Next()
 	}
-
 	if err := tb.Finish(); err != nil {
 		_ = file.Close()
 		return err
 	}
 	_ = file.Close()
 
-	// Register in Compactor and active table readers
-	rf, err := os.Open(sstPath)
+	f, err := os.Open(sstPath)
 	if err == nil {
-		tr, err := sstable.OpenTableReader(rf)
+		tr, err := sstable.OpenTableReader(f)
 		if err == nil {
 			e.mu.Lock()
 			e.tables = append(e.tables, tr)
@@ -280,23 +264,14 @@ func (e *Engine) IndexDocument(id uint64, text string) {
 	e.bm25Idx.IndexDocument(id, text)
 }
 
-func (e *Engine) Agent() *ai.AIAgent {
-	return e.agent
-}
-
-func (e *Engine) MemoryStore() *ai.MemoryStore {
-	return e.memoryStore
-}
-
-func (e *Engine) VectorCount() uint64 {
-	return e.vectorIdx.Count()
-}
+func (e *Engine) Agent() *ai.AIAgent { return e.agent }
+func (e *Engine) MemoryStore() *ai.MemoryStore { return e.memoryStore }
+func (e *Engine) VectorCount() uint64 { return e.vectorIdx.Count() }
 
 func (e *Engine) Close() error {
 	if !atomic.CompareAndSwapUint32(&e.closed, 0, 1) {
 		return nil
 	}
-
 	e.multiRaft.StopAll()
 	if err := e.wal.Close(); err != nil {
 		return err
@@ -307,6 +282,5 @@ func (e *Engine) Close() error {
 	for _, tr := range e.tables {
 		_ = tr.Close()
 	}
-
 	return nil
 }
