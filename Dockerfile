@@ -1,16 +1,16 @@
 # Stage 1: Build binary
-FROM golang:alpine AS builder
+FROM golang:1.23.6-alpine AS builder
 
 WORKDIR /app
 RUN apk add --no-cache build-base git
 
-COPY go.mod go.sum* ./
-RUN go mod download || true
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/bin/server cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -ldflags="-s -w" -o /app/bin/server ./cmd/server
 
-# Stage 2: Production scratch image
+# Stage 2: Production image
 FROM alpine:3.20
 
 WORKDIR /app
@@ -18,7 +18,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/bin/server /app/server
 
-EXPOSE 8080 8081 8082
+EXPOSE 8080
 VOLUME ["/app/data"]
 
 ENTRYPOINT ["/app/server"]
