@@ -2,7 +2,6 @@
 bin/
 data/
 *.sst
-wal/
 *.log
 
 # AI Agent Frameworks, Skills, and Local Tooling
